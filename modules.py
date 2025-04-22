@@ -1,9 +1,8 @@
 import torch.nn as nn
 import torch
 from collections import Counter
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from torch.nn import Parameter
-from torch.functional import F
 from typing import Union, List, Tuple
 
 class Tokenizer:
@@ -129,35 +128,21 @@ class SpamDataset(Dataset):
 
         return x, y
     
-class Embedding(nn.Module):
-    def __init__(self, num_embeddings: int, embedding_dim: int, padding_idx: int = None):
-        super().__init__()
-        self.num_embeddings = num_embeddings
-        self.embedding_dim = embedding_dim
-        self.padding_idx = padding_idx
-        
-        self.weight = Parameter(
-            torch.zeros(num_embeddings, embedding_dim),
-            requires_grad=True
-        )
-        nn.init.xavier_uniform_(self.weight)
-
-        if padding_idx is not None:
-            with torch.no_grad():
-                self.weight[padding_idx].fill_(0)
-            self.weight[padding_idx].requires_grad = False
-
-    def forward(self, input: torch.LongTensor) -> torch.Tensor:
-        input = input.to(self.weight.device)
-        return self.weight[input]
-
 class SpamClassifier(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int):
+    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, output_size: int = 1):
         super(SpamClassifier, self).__init__()
         self.encoder = nn.Sequential(
-            Embedding(vocab_size, embedding_dim),
-            nn.GRU(embedding_dim, hidden_size)
+            nn.Embedding(vocab_size, embedding_dim),
+            nn.GRU(embedding_dim, hidden_size, num_layers=1, batch_first=True),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size),
+            nn.Sigmoid()
         )
 
     def forward(self, inputs):
-        print(self.encoder(inputs))
+        _, H = self.encoder(inputs)
+        outputs = self.decoder(H[-1])
+        return outputs
