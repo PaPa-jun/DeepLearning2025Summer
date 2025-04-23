@@ -149,3 +149,6 @@ def test_model(model: nn.Module, test_loader: DataLoader, device: str = 'cpu') -
     avg_test_acc = sum(accs) / len(accs)
     print(f'Test Accuracy: {avg_test_acc:.4f}')
     return avg_test_acc
+
+def masked_softmax(inputs, masks):
+    pass
