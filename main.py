@@ -4,7 +4,7 @@ from modules import SpamClassifier
 
 device = 'cuda'
 
-train_loader, val_loader, test_loader, tokenizer = load_data("enron_spam_data.csv")
+train_loader, val_loader, test_loader, tokenizer = load_data("enron_spam_data.csv", tokenizer_mode="word")
 
 model = SpamClassifier(
     vocab_size=tokenizer.vocab_size,

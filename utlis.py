@@ -1,6 +1,7 @@
 import pandas as pd
 import torch.nn as nn, torch
 from torch.utils.data import DataLoader
+from torch.functional import F
 from modules import Tokenizer, SpamDataset
 from sklearn.model_selection import train_test_split
 from typing import Union, List, Tuple
@@ -149,6 +150,3 @@ def test_model(model: nn.Module, test_loader: DataLoader, device: str = 'cpu') -
     avg_test_acc = sum(accs) / len(accs)
     print(f'Test Accuracy: {avg_test_acc:.4f}')
     return avg_test_acc
-
-def masked_softmax(inputs, masks):
-    pass
