@@ -182,49 +182,6 @@ class DotProductAttention(nn.Module):
         attn_weights = self.dropout(F.softmax(scores, dim=-1))
         output = torch.matmul(attn_weights, values)
         return output
-    
-class FMultiHeadAttention(nn.Module):
-    def __init__(
-            self, key_size: int, query_size: int, value_size: int,
-            hidden_size: int, num_heads: int, dropout: float = 0,
-            use_bias: bool = False
-    ):
-        super(FMultiHeadAttention, self).__init__()
-        assert hidden_size % num_heads == 0, "hidden_size must be divisible by num_heads"
-        self.num_heads = num_heads
-        self.head_dim = hidden_size // num_heads
-        
-        self.W_q = nn.Linear(query_size, hidden_size, bias=use_bias)
-        self.W_k = nn.Linear(key_size, hidden_size, bias=use_bias)
-        self.W_v = nn.Linear(value_size, hidden_size, bias=use_bias)
-        self.W_o = nn.Linear(hidden_size, hidden_size, bias=use_bias)
-
-        self.dropout_p = dropout
-
-    def forward(self, queries: torch.Tensor, keys: torch.Tensor, 
-                values: torch.Tensor, masks: torch.Tensor = None):
-        Q = self.W_q(queries) # [batch, seq_len, hidden]
-        K = self.W_k(keys)
-        V = self.W_v(keys)
-
-        batch_size = Q.size(0)
-        Q = Q.view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)
-        K = K.view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)
-        V = V.view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)
-
-        if masks is not None:
-            masks = masks.unsqueeze(1).unsqueeze(-2).expand(-1, self.num_heads, queries.shape[-2], -1)
-
-        attn_output = F.scaled_dot_product_attention(
-            Q, K, V, (masks == 1),
-            self.dropout_p
-        )
-
-        attn_output = attn_output.transpose(1, 2).contiguous()
-        attn_output = attn_output.view(batch_size, -1, self.num_heads * self.head_dim)
-        
-        output = self.W_o(attn_output)
-        return output
 
 class MultiHeadAttention(nn.Module):
     def __init__(
@@ -281,45 +238,3 @@ class PositionalEncoding(nn.Module):
     def forward(self, X: torch.Tensor):
         X = X + self.P[:, :X.shape[1], :].to(X.device)
         return self.dropout(X)
-    
-class PositionWiseFFN(nn.Module):
-    """
-    Customized FNN module.
-    """
-    def __init__(self, input_size: int, hidden_size: int, output_size: int):
-        super(PositionWiseFFN, self).__init__()
-        self.sequntial = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, output_size)
-        )
-
-    def forward(self, X: torch.Tensor):
-        return self.sequntial(X)
-    
-class AddNorm(nn.Module):
-    def __init__(self, normalized_shape: tuple, dropout: float = 0):
-        super(AddNorm, self).__init__()
-        self.dropout = nn.Dropout(dropout)
-        self.layernorm = nn.LayerNorm(normalized_shape)
-
-    def forward(self, X: torch.Tensor, Y: torch.Tensor):
-        return self.layernorm(self.dropout(Y) + X)
-    
-class EncoderBlock(nn.Module):
-    def __init__(
-            self, key_size: int, query_size: int, value_size: int,
-            hidden_size: int, norm_shape: tuple, fnn_input_size: int,
-            fnn_hidden_size: int, num_heads: int, dropout: float = 0,
-            use_bias: bool = False
-    ):
-        super(EncoderBlock, self).__init__()
-
-class TransformerEncoder(nn.Module):
-    def __init__(
-            self, vocab_size: int, key_size: int, query_size: int, value_size: int,
-            hidden_size: int, dropout: float = 0, use_bias: bool = False
-    ):
-        super(TransformerEncoder, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, hidden_size)
-        self.positional_encoding = PositionalEncoding(hidden_size, dropout)
