@@ -22,10 +22,10 @@ def load_data(
     data_frame['label'] = data_frame['label'].map({'spam': 1, 'ham': 0})
 
     texts = (data_frame["abstract"] + " " + data_frame["content"]).to_list()
-    lambels = data_frame['label'].to_list()
+    labels = data_frame['label'].to_list()
 
     train_val_features, test_features, train_val_labels, test_labels = train_test_split(
-        texts, lambels, test_size=split_rate, random_state=42
+        texts, labels, test_size=split_rate, random_state=42
     )
 
     train_features, val_features, train_labels, val_labels = train_test_split(
@@ -113,7 +113,6 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
     best_val_loss = float('inf')
     train_losses = []
     val_losses = []
-    model.to(device)
 
     for epoch in range(epochs):
         train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)

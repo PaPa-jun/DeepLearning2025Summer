@@ -11,7 +11,7 @@ model = SpamClassifier(
     embedding_dim=128,
     hidden_size=64,
     output_size=1,
-)
+).to(device)
 
 criterion = torch.nn.BCELoss().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)

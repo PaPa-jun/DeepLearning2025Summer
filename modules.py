@@ -63,7 +63,7 @@ class Tokenizer:
         self.max_length = max_length
         self.truncation_side = truncation_side
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> Tuple[List[int], List[int]]:
         tokens = self._split([text], self.mode)[0]
         ids = [self.token2idx.get(t, self.unk) for t in tokens]
 
@@ -75,15 +75,20 @@ class Tokenizer:
             else:
                 raise ValueError("'trunction_side' should be either 'right' or 'left'!")
             
+        valid_length = len(ids)
+        mask = [1] * valid_length
+            
         if self.padding and len(ids) < self.min_length:
             if self.padding_side == "left":
-                ids = [self.pad_idx] * (self.min_length - len(ids)) + ids
+                ids = [self.pad_idx] * (self.min_length - valid_length) + ids
+                mask = [0] * (self.min_length - valid_length) + [1] * valid_length
             elif self.padding_side == "right":
-                ids += [self.pad_idx] * (self.min_length - len(ids))
+                ids += [self.pad_idx] * (self.min_length - valid_length)
+                mask = [1] * valid_length + [0] * (self.min_length - valid_length)
             else:
                 raise ValueError("'padding_side' should be either 'right' or 'left'!")
             
-        return ids
+        return ids, mask
     
     def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
         tokens = []
@@ -107,27 +112,35 @@ class Tokenizer:
         return self.__len__()
 
 class SpamDataset(Dataset):
-    def __init__(self, texts: list, labels: list, tokenizer: Tokenizer, encoding_length: int = 256):
+    def __init__(
+            self, texts: list, labels: list, tokenizer: Tokenizer, encoding_length: int = 256,
+            padding_side: str = 'left', truncation_side: str = "right", mask: bool = False
+    ):
         super(SpamDataset, self).__init__()
         self.tokenizer = tokenizer
         self.texts = texts
         self.labels = labels
+        self.mask = mask
 
-        self.tokenizer.enable_padding(encoding_length, 'left')
-        self.tokenizer.enable_truncation(encoding_length, 'right')
+        self.tokenizer.enable_padding(encoding_length, padding_side)
+        self.tokenizer.enable_truncation(encoding_length, truncation_side)
 
     def __len__(self):
         return len(self.texts)
     
     def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
         text = self.texts[index]
-        ids = self.tokenizer.encode(text)
+        ids, mask = self.tokenizer.encode(text)
 
         x = torch.tensor(ids, dtype=torch.long)
         y = torch.tensor(self.labels[index], dtype=torch.float32)
+        mask = torch.tensor(mask, dtype=torch.int)
 
-        return x, y
-    
+        if self.mask:
+            return x, y, mask
+        else:
+            return x, y
+
 class SpamClassifier(nn.Module):
     def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, output_size: int = 1):
         super(SpamClassifier, self).__init__()
