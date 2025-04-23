@@ -113,6 +113,7 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
     best_val_loss = float('inf')
     train_losses = []
     val_losses = []
+    model.to(device)
 
     for epoch in range(epochs):
         train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
@@ -121,10 +122,11 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
         train_losses.append(train_loss)
         val_losses.append(val_loss)
 
-        if save and val_loss < best_val_loss:
+        if  val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), save_path)
-            print(f'Model saved to {save_path}')
+            if save:
+                torch.save(model.state_dict(), save_path)
+                print(f'Model saved to {save_path}')
 
         print(f'Epoch [{epoch+1}/{epochs}], Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, '
               f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
@@ -133,6 +135,7 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
     print(f'Training complete. Best validation loss: {best_val_loss:.4f}')
 
 def test_model(model: nn.Module, test_loader: DataLoader, device: str = 'cpu') -> float:
+    model.to(device)
     accs = []
     for inputs, labels in test_loader:
         inputs = inputs.to(device)
