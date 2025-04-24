@@ -5,8 +5,15 @@ from torch.utils.data import Dataset
 from torch.functional import F
 from typing import Union, List, Tuple
 
+
 class Tokenizer:
-    def __init__(self, texts: list, mode: str = 'word', min_freq: int = 0, special_tokens: list = None):
+    def __init__(
+        self,
+        texts: list,
+        mode: str = "word",
+        min_freq: int = 0,
+        special_tokens: list = None,
+    ):
         self.mode = mode
         self.tokens = self._split(texts, mode)
         counter = self._count_corpus()
@@ -14,10 +21,10 @@ class Tokenizer:
         self.special_tokens = special_tokens if special_tokens else []
         self.padding = False
         self.truncation = False
-        
-        self.idx2token = ['<unk>'] + self.special_tokens
+
+        self.idx2token = ["<unk>"] + self.special_tokens
         self.token2idx = {token: idx for idx, token in enumerate(self.idx2token)}
-        
+
         for token, freq in self._token_freqs:
             if freq < min_freq:
                 break
@@ -39,26 +46,28 @@ class Tokenizer:
         return Counter(tokens)
 
     def _split(self, texts: list, mode: str) -> list:
-        if mode == 'word':
+        if mode == "word":
             return [line.split() for line in texts]
-        if mode == 'char':
+        if mode == "char":
             return [list(line) for line in texts]
         else:
             raise ValueError("Wrong mode: 'word' or 'char'!")
-        
-    def enable_padding(self, min_length: int, padding_side: str = 'right') -> None:
-        if '<pad>' not in self.special_tokens:
-            self.special_tokens.append('<pad>')
-            self.idx2token.insert(1, '<pad>')
+
+    def enable_padding(self, min_length: int, padding_side: str = "right") -> None:
+        if "<pad>" not in self.special_tokens:
+            self.special_tokens.append("<pad>")
+            self.idx2token.insert(1, "<pad>")
             self.token2idx = {token: idx for idx, token in enumerate(self.idx2token)}
             self.pad_idx = len(self.special_tokens) - 1
         else:
-            self.pad_idx = self.token2idx['<pad>']
+            self.pad_idx = self.token2idx["<pad>"]
         self.padding = True
         self.padding_side = padding_side
         self.min_length = min_length
 
-    def enable_truncation(self, max_length: int, truncation_side: str = 'right') -> None:
+    def enable_truncation(
+        self, max_length: int, truncation_side: str = "right"
+    ) -> None:
         self.truncation = True
         self.max_length = max_length
         self.truncation_side = truncation_side
@@ -74,10 +83,10 @@ class Tokenizer:
                 ids = ids[: self.max_length]
             else:
                 raise ValueError("'trunction_side' should be either 'right' or 'left'!")
-            
+
         valid_length = len(ids)
         mask = [1] * valid_length
-            
+
         if self.padding and len(ids) < self.min_length:
             if self.padding_side == "left":
                 ids = [self.pad_idx] * (self.min_length - valid_length) + ids
@@ -87,17 +96,17 @@ class Tokenizer:
                 mask = [1] * valid_length + [0] * (self.min_length - valid_length)
             else:
                 raise ValueError("'padding_side' should be either 'right' or 'left'!")
-            
+
         return ids, mask
-    
+
     def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
         tokens = []
         for idx in ids:
             token = self.idx2token[idx]
-            if skip_special_tokens and token in {*self.special_tokens, '<unk>'}:
+            if skip_special_tokens and token in {*self.special_tokens, "<unk>"}:
                 continue
             tokens.append(token)
-        return ' '.join(tokens) if self.mode == 'word' else ''.join(tokens)
+        return " ".join(tokens) if self.mode == "word" else "".join(tokens)
 
     @property
     def unk(self):
@@ -106,15 +115,22 @@ class Tokenizer:
     @property
     def token_freqs(self):
         return self._token_freqs
-    
+
     @property
     def vocab_size(self):
         return self.__len__()
 
+
 class SpamDataset(Dataset):
     def __init__(
-            self, texts: list, labels: list, tokenizer: Tokenizer, encoding_length: int = 256,
-            padding_side: str = 'left', truncation_side: str = "right", mask: bool = False
+        self,
+        texts: list,
+        labels: list,
+        tokenizer: Tokenizer,
+        encoding_length: int = 256,
+        padding_side: str = "left",
+        truncation_side: str = "right",
+        mask: bool = False,
     ):
         super(SpamDataset, self).__init__()
         self.tokenizer = tokenizer
@@ -127,7 +143,7 @@ class SpamDataset(Dataset):
 
     def __len__(self):
         return len(self.texts)
-    
+
     def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
         text = self.texts[index]
         ids, mask = self.tokenizer.encode(text)
@@ -140,15 +156,20 @@ class SpamDataset(Dataset):
             return x, y, mask
         else:
             return x, y
-    
+
+
 class DotProductAttention(nn.Module):
     def __init__(self, scale: float = None, dropout: float = 0):
         super(DotProductAttention, self).__init__()
         self.dropout = nn.Dropout(dropout)
         self.scale = scale
 
-    def forward(self, queries: torch.Tensor, keys: torch.Tensor,
-                values: torch.Tensor, masks: torch.Tensor = None
+    def forward(
+        self,
+        queries: torch.Tensor,
+        keys: torch.Tensor,
+        values: torch.Tensor,
+        masks: torch.Tensor = None,
     ):
         d_k = queries.shape[-1]
         scale = self.scale if self.scale is not None else math.sqrt(d_k)
@@ -162,16 +183,24 @@ class DotProductAttention(nn.Module):
         output = torch.matmul(attn_weights, values)
         return output
 
+
 class MultiHeadAttention(nn.Module):
     def __init__(
-            self, key_size: int, query_size: int, value_size: int,
-            hidden_size: int, num_heads: int, dropout: float = 0,
-            use_bias: bool = False
+        self,
+        key_size: int,
+        query_size: int,
+        value_size: int,
+        hidden_size: int,
+        num_heads: int,
+        dropout: float = 0,
+        use_bias: bool = False,
     ):
         super(MultiHeadAttention, self).__init__()
-        assert hidden_size % num_heads == 0, "hidden_size must be divisible by num_heads"
+        assert (
+            hidden_size % num_heads == 0
+        ), "hidden_size must be divisible by num_heads"
         self.num_heads = num_heads
-        
+
         self.W_q = nn.Linear(query_size, hidden_size, bias=use_bias)
         self.W_k = nn.Linear(key_size, hidden_size, bias=use_bias)
         self.W_v = nn.Linear(value_size, hidden_size, bias=use_bias)
@@ -183,14 +212,19 @@ class MultiHeadAttention(nn.Module):
         inputs = inputs.reshape(inputs.shape[0], inputs.shape[1], self.num_heads, -1)
         inputs = inputs.permute(0, 2, 1, 3)
         return inputs.reshape(-1, inputs.shape[2], inputs.shape[3])
-    
+
     def _transpose_output(self, inputs: torch.Tensor):
         inputs = inputs.reshape(-1, self.num_heads, inputs.shape[1], inputs.shape[2])
         inputs = inputs.permute(0, 2, 1, 3)
         return inputs.reshape(inputs.shape[0], inputs.shape[1], -1)
 
-    def forward(self, queries: torch.Tensor, keys: torch.Tensor, 
-                values: torch.Tensor, masks: torch.Tensor = None):
+    def forward(
+        self,
+        queries: torch.Tensor,
+        keys: torch.Tensor,
+        values: torch.Tensor,
+        masks: torch.Tensor = None,
+    ):
         Q = self._transpose_qkv(self.W_q(queries))
         K = self._transpose_qkv(self.W_k(keys))
         V = self._transpose_qkv(self.W_v(values))
@@ -203,13 +237,18 @@ class MultiHeadAttention(nn.Module):
         output = self.W_o(attn_output)
         return output
 
+
 class PositionalEncoder(nn.Module):
     def __init__(self, sequence_length: int, embedding_dim: int, dropout: float = 0):
         super(PositionalEncoder, self).__init__()
         self.dropout = nn.Dropout(dropout)
         position_matrix = torch.zeros(1, sequence_length, embedding_dim)
-        term = torch.arange(sequence_length, dtype=torch.float32).reshape(-1, 1) / \
-            torch.pow(10000, torch.arange(0, embedding_dim, 2, dtype=torch.float32) / embedding_dim)
+        term = torch.arange(sequence_length, dtype=torch.float32).reshape(
+            -1, 1
+        ) / torch.pow(
+            10000,
+            torch.arange(0, embedding_dim, 2, dtype=torch.float32) / embedding_dim,
+        )
         position_matrix[:, :, 0::2] = torch.sin(term)
         position_matrix[:, :, 1::2] = torch.cos(term)
 
@@ -219,13 +258,16 @@ class PositionalEncoder(nn.Module):
         inputs = inputs + self.position_matrix
         return self.dropout(inputs)
 
+
 class RotaryPositionalEncoder(nn.Module):
     def __init__(self, sequence_length: int, embedding_dim: int, dropout: float = 0):
         super(RotaryPositionalEncoder, self).__init__()
         self.dropout = nn.Dropout(dropout)
         self.embedding_dim = embedding_dim
 
-        inv_freq = 1.0 / (10000 ** (torch.arange(0, embedding_dim, 2).float() / embedding_dim))
+        inv_freq = 1.0 / (
+            10000 ** (torch.arange(0, embedding_dim, 2).float() / embedding_dim)
+        )
         self.register_buffer("inv_freq", inv_freq)
 
         position_ids = torch.arange(sequence_length, dtype=torch.float32).unsqueeze(1)
@@ -234,15 +276,23 @@ class RotaryPositionalEncoder(nn.Module):
     def _compute_rotary_embedding(self, inputs: torch.Tensor):
         _, sequence_length, _ = inputs.shape
 
-        sinusoid_inp = torch.einsum("i,j->ij", self.position_ids.squeeze(1), self.inv_freq)
+        sinusoid_inp = torch.einsum(
+            "i,j->ij", self.position_ids.squeeze(1), self.inv_freq
+        )
         sin_values = torch.sin(sinusoid_inp)
         cos_values = torch.cos(sinusoid_inp)
 
         inputs_split = torch.chunk(inputs, 2, dim=-1)
         inputs_even, inputs_odd = inputs_split[0], inputs_split[1]
 
-        rotated_even = inputs_even * cos_values[:sequence_length] - inputs_odd * sin_values[:sequence_length]
-        rotated_odd = inputs_even * sin_values[:sequence_length] + inputs_odd * cos_values[:sequence_length]
+        rotated_even = (
+            inputs_even * cos_values[:sequence_length]
+            - inputs_odd * sin_values[:sequence_length]
+        )
+        rotated_odd = (
+            inputs_even * sin_values[:sequence_length]
+            + inputs_odd * cos_values[:sequence_length]
+        )
 
         rotated_inputs = torch.cat([rotated_even, rotated_odd], dim=-1)
 
@@ -252,9 +302,17 @@ class RotaryPositionalEncoder(nn.Module):
         rotated_inputs = self._compute_rotary_embedding(inputs)
         return self.dropout(rotated_inputs)
 
+
 # RNN Model
 class SpamClassifierRNN(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, output_size: int = 1, dropout: float = 0):
+    def __init__(
+        self,
+        vocab_size: int,
+        embedding_dim: int,
+        hidden_size: int,
+        output_size: int = 1,
+        dropout: float = 0,
+    ):
         super(SpamClassifierRNN, self).__init__()
         self.dropout = nn.Dropout(dropout)
         self.encoder = nn.Sequential(
@@ -264,7 +322,7 @@ class SpamClassifierRNN(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, output_size)
+            nn.Linear(hidden_size, output_size),
         )
 
     def forward(self, inputs):
@@ -272,33 +330,47 @@ class SpamClassifierRNN(nn.Module):
         H = self.dropout(H)[-1]
         outputs = self.decoder(H)
         return outputs
-    
+
+
 # Attention Model
 class SpamClassifierAttention(nn.Module):
     def __init__(
-            self, vocab_size: int, encoding_length: int, embedding_dim: int, hidden_size: int,
-            num_heads: int, dropout: int = 0, use_bias: bool = False,
-            output_size: int = 1, rotary: bool = False
+        self,
+        vocab_size: int,
+        encoding_length: int,
+        embedding_dim: int,
+        hidden_size: int,
+        num_heads: int,
+        dropout: int = 0,
+        use_bias: bool = False,
+        output_size: int = 1,
+        rotary: bool = False,
     ):
         super(SpamClassifierAttention, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Embedding(vocab_size, embedding_dim)
-        )
+        self.encoder = nn.Sequential(nn.Embedding(vocab_size, embedding_dim))
         self.encoder.add_module(
             "positional_encoder",
-            RotaryPositionalEncoder(encoding_length, embedding_dim, dropout) if rotary else
-            PositionalEncoder(encoding_length, embedding_dim, dropout)
+            (
+                RotaryPositionalEncoder(encoding_length, embedding_dim, dropout)
+                if rotary
+                else PositionalEncoder(encoding_length, embedding_dim, dropout)
+            ),
         )
         self.attention = MultiHeadAttention(
-            embedding_dim, embedding_dim, embedding_dim,
-            hidden_size, num_heads, dropout, use_bias
+            embedding_dim,
+            embedding_dim,
+            embedding_dim,
+            hidden_size,
+            num_heads,
+            dropout,
+            use_bias,
         )
         self.decoder = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, output_size)
+            nn.Linear(hidden_size, output_size),
         )
-    
+
     def forward(self, inputs: torch.Tensor, masks: torch.Tensor):
         inputs = self.encoder(inputs)
         attn_out = self.attention(inputs, inputs, inputs, masks)
