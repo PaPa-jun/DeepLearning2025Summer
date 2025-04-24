@@ -1,8 +1,9 @@
-import pandas as pd
+import pandas as pd, numpy as np
 import torch.nn as nn, torch
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from typing import Union, List, Tuple, Dict, Optional
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
 
 def load_data(data_path: str) -> Tuple[List[str], List[str]]:
     data_frame = pd.read_csv(data_path).drop(columns=['Date']).rename(
@@ -48,7 +49,7 @@ def train_epoch(
         optimizer.step()
 
         train_loss += loss.item()
-        train_correct += ((predictions > 0.5).float() == labels).sum().item() \
+        train_correct += ((torch.sigmoid(predictions) > 0.5).float() == labels).sum().item() \
             if isinstance(criterion, nn.BCEWithLogitsLoss) else (torch.argmax(predictions, 1) == labels).sum().item()
         train_samples += labels.shape[0]
 
@@ -81,7 +82,7 @@ def evaluate_epoch(
         loss = criterion(predictions, labels)
         
         eval_loss += loss.item()
-        eval_correct += ((predictions > 0.5).float() == labels).sum().item() \
+        eval_correct += ((torch.sigmoid(predictions) > 0.5).float() == labels).sum().item() \
             if isinstance(criterion, nn.BCEWithLogitsLoss) else (torch.argmax(predictions, 1) == labels).sum().item()
         eval_samples += labels.shape[0]
 
@@ -96,33 +97,53 @@ def test_model(
         device: str = "cpu",
         attention: bool = False
 ):
+    model.eval()
     test_loss = 0
-    test_correct = 0
-    test_samples = 0
-    for stuffs in test_loader:
-        if attention:
-            inputs, labels, masks = stuffs
-            inputs = inputs.to(device)
-            labels = labels.float().unsqueeze(1).to(device) \
+    all_preds = []
+    all_labels = []
+    
+    with torch.no_grad():
+        for stuffs in test_loader:
+            if attention:
+                inputs, labels, masks = stuffs
+                inputs, masks = inputs.to(device), masks.to(device)
+            else:
+                inputs, labels = stuffs
+                inputs = inputs.to(device)
+            
+            labels_tensor = labels.float().unsqueeze(1).to(device) \
                 if isinstance(criterion, nn.BCEWithLogitsLoss) else labels.long().to(device)
-            masks = masks.to(device)
-        else:
-            inputs, labels = stuffs
-            inputs = inputs.to(device)
-            labels = labels.float().unsqueeze(1).to(device) \
-                if isinstance(criterion, nn.BCEWithLogitsLoss) else labels.long().to(device)
+            
+            outputs = model(inputs, masks) if attention else model(inputs)
+            loss = criterion(outputs, labels_tensor)
+            test_loss += loss.item()
 
-        predictions = model(inputs, masks) if attention else model(inputs)
-        loss = criterion(predictions, labels)
-
-        test_loss += loss.item()
-        test_correct += ((predictions > 0.5).float() == labels).sum().item() \
-            if isinstance(criterion, nn.BCEWithLogitsLoss) else (torch.argmax(predictions, 1) == labels).sum().item()
-        test_samples += labels.shape[0]
+            if isinstance(criterion, nn.BCEWithLogitsLoss):
+                probs = torch.sigmoid(outputs).cpu().numpy()
+                preds = (probs > 0.5).astype(int)
+                labels = labels.numpy()
+            else:
+                probs = torch.softmax(outputs, dim=1).cpu().numpy()
+                preds = np.argmax(probs, axis=1)
+                labels = labels.numpy()
+            
+            all_preds.extend(preds)
+            all_labels.extend(labels)
 
     avg_loss = test_loss / len(test_loader)
-    accuracy = test_correct / test_samples
-    return avg_loss, accuracy
+
+    accuracy = accuracy_score(all_labels, all_preds)
+    precision = precision_score(all_labels, all_preds)
+    recall = recall_score(all_labels, all_preds)
+    f1 = f1_score(all_labels, all_preds)
+    
+    return {
+        'loss': avg_loss,
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1': f1
+    }
 
 def train_model(
         model: nn.Module, 

@@ -2,7 +2,6 @@ import torch.nn as nn
 import torch, math
 from collections import Counter
 from torch.utils.data import Dataset
-from torch.nn import Parameter
 from torch.functional import F
 from typing import Union, List, Tuple
 
@@ -204,23 +203,55 @@ class MultiHeadAttention(nn.Module):
         output = self.W_o(attn_output)
         return output
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, embedding_dim: int, dropout: float = 0, max_length=1000):
-        super(PositionalEncoding, self).__init__()
-        self.embedding_dim = embedding_dim
+class PositionalEncoder(nn.Module):
+    def __init__(self, sequence_length: int, embedding_dim: int, dropout: float = 0):
+        super(PositionalEncoder, self).__init__()
         self.dropout = nn.Dropout(dropout)
-        self.P = torch.zeros((1, max_length, embedding_dim))
-        X = torch.arange(max_length, dtype=torch.float32).reshape(
-            -1, 1) / torch.pow(10000, torch.arange(
-            0, embedding_dim, 2, dtype=torch.float32) / embedding_dim)
-        self.P[:, :, 0::2] = torch.sin(X)
-        self.P[:, :, 1::2] = torch.cos(X)
+        position_matrix = torch.zeros(1, sequence_length, embedding_dim)
+        term = torch.arange(sequence_length, dtype=torch.float32).reshape(-1, 1) / \
+            torch.pow(10000, torch.arange(0, embedding_dim, 2, dtype=torch.float32) / embedding_dim)
+        position_matrix[:, :, 0::2] = torch.sin(term)
+        position_matrix[:, :, 1::2] = torch.cos(term)
 
-    def forward(self, X: torch.Tensor):
-        X = X * math.sqrt(self.embedding_dim)
-        X = X + self.P[:, :X.shape[1], :].to(X.device)
-        return self.dropout(X)
-    
+        self.register_buffer("position_matrix", position_matrix)
+
+    def forward(self, inputs: torch.Tensor):
+        inputs = inputs + self.position_matrix
+        return self.dropout(inputs)
+
+class RotaryPositionalEncoder(nn.Module):
+    def __init__(self, sequence_length: int, embedding_dim: int, dropout: float = 0):
+        super(RotaryPositionalEncoder, self).__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.embedding_dim = embedding_dim
+
+        inv_freq = 1.0 / (10000 ** (torch.arange(0, embedding_dim, 2).float() / embedding_dim))
+        self.register_buffer("inv_freq", inv_freq)
+
+        position_ids = torch.arange(sequence_length, dtype=torch.float32).unsqueeze(1)
+        self.register_buffer("position_ids", position_ids)
+
+    def _compute_rotary_embedding(self, inputs: torch.Tensor):
+        batch_size, sequence_length, embedding_dim = inputs.shape
+
+        sinusoid_inp = torch.einsum("i,j->ij", self.position_ids.squeeze(1), self.inv_freq)
+        sin_values = torch.sin(sinusoid_inp)
+        cos_values = torch.cos(sinusoid_inp)
+
+        inputs_split = torch.chunk(inputs, 2, dim=-1)
+        inputs_even, inputs_odd = inputs_split[0], inputs_split[1]
+
+        rotated_even = inputs_even * cos_values[:sequence_length] - inputs_odd * sin_values[:sequence_length]
+        rotated_odd = inputs_even * sin_values[:sequence_length] + inputs_odd * cos_values[:sequence_length]
+
+        rotated_inputs = torch.cat([rotated_even, rotated_odd], dim=-1)
+
+        return rotated_inputs
+
+    def forward(self, inputs: torch.Tensor):
+        rotated_inputs = self._compute_rotary_embedding(inputs)
+        return self.dropout(rotated_inputs)
+
 # RNN Model
 class SpamClassifierRNN(nn.Module):
     def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, output_size: int = 1):
@@ -243,18 +274,22 @@ class SpamClassifierRNN(nn.Module):
 # Attention Model
 class SpamClassifierAttention(nn.Module):
     def __init__(
-            self, vocab_size: int, embedding_dim: int, hidden_size: int,
-            num_heads: int, drop_out: int = 0, use_bias: bool = False,
-            output_size: int = 1
+            self, vocab_size: int, encoding_length: int, embedding_dim: int, hidden_size: int,
+            num_heads: int, dropout: int = 0, use_bias: bool = False,
+            output_size: int = 1, rotary: bool = False
     ):
         super(SpamClassifierAttention, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Embedding(vocab_size, embedding_dim),
-            PositionalEncoding(embedding_dim)
+            nn.Embedding(vocab_size, embedding_dim)
+        )
+        self.encoder.add_module(
+            "positional_encoder",
+            RotaryPositionalEncoder(encoding_length, embedding_dim, dropout) if rotary else
+            PositionalEncoder(encoding_length, embedding_dim, dropout)
         )
         self.attention = MultiHeadAttention(
             embedding_dim, embedding_dim, embedding_dim,
-            hidden_size, num_heads, drop_out, use_bias
+            hidden_size, num_heads, dropout, use_bias
         )
         self.decoder = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
@@ -265,6 +300,5 @@ class SpamClassifierAttention(nn.Module):
     def forward(self, inputs: torch.Tensor, masks: torch.Tensor):
         inputs = self.encoder(inputs)
         attn_out = self.attention(inputs, inputs, inputs, masks)
-        attn_out = attn_out.mean(dim=1)
-        predictions = self.decoder(attn_out)
+        predictions = self.decoder(attn_out[:, -1, :])
         return predictions
