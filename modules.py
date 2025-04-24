@@ -232,7 +232,7 @@ class RotaryPositionalEncoder(nn.Module):
         self.register_buffer("position_ids", position_ids)
 
     def _compute_rotary_embedding(self, inputs: torch.Tensor):
-        batch_size, sequence_length, embedding_dim = inputs.shape
+        _, sequence_length, _ = inputs.shape
 
         sinusoid_inp = torch.einsum("i,j->ij", self.position_ids.squeeze(1), self.inv_freq)
         sin_values = torch.sin(sinusoid_inp)
@@ -254,8 +254,9 @@ class RotaryPositionalEncoder(nn.Module):
 
 # RNN Model
 class SpamClassifierRNN(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, output_size: int = 1):
+    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, output_size: int = 1, dropout: float = 0):
         super(SpamClassifierRNN, self).__init__()
+        self.dropout = nn.Dropout(dropout)
         self.encoder = nn.Sequential(
             nn.Embedding(vocab_size, embedding_dim),
             nn.RNN(embedding_dim, hidden_size, num_layers=1, batch_first=True),
@@ -268,7 +269,8 @@ class SpamClassifierRNN(nn.Module):
 
     def forward(self, inputs):
         _, H = self.encoder(inputs)
-        outputs = self.decoder(H[-1])
+        H = self.dropout(H)[-1]
+        outputs = self.decoder(H)
         return outputs
     
 # Attention Model

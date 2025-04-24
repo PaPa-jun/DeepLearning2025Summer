@@ -65,26 +65,28 @@ def evaluate_epoch(
     eval_correct = 0
     eval_loss = 0
     eval_samples = 0
-    for stuffs in eval_loader:
-        if attention:
-            inputs, labels, masks = stuffs
-            inputs = inputs.to(device)
-            labels = labels.float().unsqueeze(1).to(device) \
-                if isinstance(criterion, nn.BCEWithLogitsLoss) else labels.long().to(device)
-            masks = masks.to(device)
-        else:
-            inputs, labels = stuffs
-            inputs = inputs.to(device)
-            labels = labels.float().unsqueeze(1).to(device) \
-                if isinstance(criterion, nn.BCEWithLogitsLoss) else labels.long().to(device)
+
+    with torch.no_grad():
+        for stuffs in eval_loader:
+            if attention:
+                inputs, labels, masks = stuffs
+                inputs = inputs.to(device)
+                labels = labels.float().unsqueeze(1).to(device) \
+                    if isinstance(criterion, nn.BCEWithLogitsLoss) else labels.long().to(device)
+                masks = masks.to(device)
+            else:
+                inputs, labels = stuffs
+                inputs = inputs.to(device)
+                labels = labels.float().unsqueeze(1).to(device) \
+                    if isinstance(criterion, nn.BCEWithLogitsLoss) else labels.long().to(device)
+                
+            predictions = model(inputs, masks) if attention else model(inputs)
+            loss = criterion(predictions, labels)
             
-        predictions = model(inputs, masks) if attention else model(inputs)
-        loss = criterion(predictions, labels)
-        
-        eval_loss += loss.item()
-        eval_correct += ((torch.sigmoid(predictions) > 0.5).float() == labels).sum().item() \
-            if isinstance(criterion, nn.BCEWithLogitsLoss) else (torch.argmax(predictions, 1) == labels).sum().item()
-        eval_samples += labels.shape[0]
+            eval_loss += loss.item()
+            eval_correct += ((torch.sigmoid(predictions) > 0.5).float() == labels).sum().item() \
+                if isinstance(criterion, nn.BCEWithLogitsLoss) else (torch.argmax(predictions, 1) == labels).sum().item()
+            eval_samples += labels.shape[0]
 
     avg_loss = eval_loss / len(eval_loader)
     accuracy = eval_correct / eval_samples

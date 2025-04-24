@@ -8,11 +8,11 @@ from sklearn.model_selection import train_test_split
 
 def rnn_experiment(
         texts: list, labels: list, tokenizer: Tokenizer, batch_size: int = 32,
-        encoding_length: int = 256, embedding_dim: int = 128, lr: float = 0.001,
+        encoding_length: int = 256, embedding_dim: int = 128, lr: float = 0.001, dropout: float = 0.3,
         epochs: int = 10, hidden_size: int = 64, output_size: int = 2, device: str = "cpu"
 ):
     train_texts, test_texts, train_labels, test_labels = train_test_split(texts, labels, test_size=0.1, random_state=42)
-    train_texts, eval_texts, train_labels, eval_labels = train_test_split(train_texts, train_labels, test_size=0.2, random_state=42)
+    train_texts, eval_texts, train_labels, eval_labels = train_test_split(train_texts, train_labels, test_size=0.22, random_state=42)
     train_dataset = SpamDataset(
         train_texts, train_labels, tokenizer,
         encoding_length=encoding_length,
@@ -41,7 +41,8 @@ def rnn_experiment(
         vocab_size=tokenizer.vocab_size,
         embedding_dim=embedding_dim,
         hidden_size=hidden_size,
-        output_size=output_size
+        output_size=output_size,
+        dropout=dropout
     ).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss() if output_size == 2 else nn.BCEWithLogitsLoss()
@@ -75,7 +76,7 @@ def attention_experiment(
         dropout: float = 0, rotary: bool = False, use_bias: bool = False, device: str = "cpu"
 ):
     train_texts, test_texts, train_labels, test_labels = train_test_split(texts, labels, test_size=0.1, random_state=42)
-    train_texts, eval_texts, train_labels, eval_labels = train_test_split(train_texts, train_labels, test_size=0.2, random_state=42)
+    train_texts, eval_texts, train_labels, eval_labels = train_test_split(train_texts, train_labels, test_size=0.22, random_state=42)
     train_dataset = SpamDataset(
         train_texts, train_labels, tokenizer,
         encoding_length=encoding_length,
@@ -175,7 +176,8 @@ def main():
             epochs=args.epochs,
             hidden_size=args.hidden_size,
             output_size=args.output_size,
-            device=args.device
+            device=args.device,
+            dropout=args.dropout
         )
     elif args.model_type == "attention":
         attention_experiment(
