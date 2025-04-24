@@ -141,26 +141,6 @@ class SpamDataset(Dataset):
             return x, y, mask
         else:
             return x, y
-
-# RNN Model
-class SpamClassifier(nn.Module):
-    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, output_size: int = 1):
-        super(SpamClassifier, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Embedding(vocab_size, embedding_dim),
-            nn.GRU(embedding_dim, hidden_size, num_layers=1, batch_first=True),
-        )
-        self.decoder = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, output_size),
-            nn.Sigmoid()
-        )
-
-    def forward(self, inputs):
-        _, H = self.encoder(inputs)
-        outputs = self.decoder(H[-1])
-        return outputs
     
 class DotProductAttention(nn.Module):
     def __init__(self, scale: float = None, dropout: float = 0):
@@ -225,16 +205,66 @@ class MultiHeadAttention(nn.Module):
         return output
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, hidden_size: int, dropout: float = 0, max_length=1000):
+    def __init__(self, embedding_dim: int, dropout: float = 0, max_length=1000):
         super(PositionalEncoding, self).__init__()
+        self.embedding_dim = embedding_dim
         self.dropout = nn.Dropout(dropout)
-        self.P = torch.zeros((1, max_length, hidden_size))
+        self.P = torch.zeros((1, max_length, embedding_dim))
         X = torch.arange(max_length, dtype=torch.float32).reshape(
             -1, 1) / torch.pow(10000, torch.arange(
-            0, hidden_size, 2, dtype=torch.float32) / hidden_size)
+            0, embedding_dim, 2, dtype=torch.float32) / embedding_dim)
         self.P[:, :, 0::2] = torch.sin(X)
         self.P[:, :, 1::2] = torch.cos(X)
 
     def forward(self, X: torch.Tensor):
+        X = X * math.sqrt(self.embedding_dim)
         X = X + self.P[:, :X.shape[1], :].to(X.device)
         return self.dropout(X)
+    
+# RNN Model
+class SpamClassifierRNN(nn.Module):
+    def __init__(self, vocab_size: int, embedding_dim: int, hidden_size: int, output_size: int = 1):
+        super(SpamClassifierRNN, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Embedding(vocab_size, embedding_dim),
+            nn.RNN(embedding_dim, hidden_size, num_layers=1, batch_first=True),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size)
+        )
+
+    def forward(self, inputs):
+        _, H = self.encoder(inputs)
+        outputs = self.decoder(H[-1])
+        return outputs
+    
+# Attention Model
+class SpamClassifierAttention(nn.Module):
+    def __init__(
+            self, vocab_size: int, embedding_dim: int, hidden_size: int,
+            num_heads: int, drop_out: int = 0, use_bias: bool = False,
+            output_size: int = 1
+    ):
+        super(SpamClassifierAttention, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Embedding(vocab_size, embedding_dim),
+            PositionalEncoding(embedding_dim)
+        )
+        self.attention = MultiHeadAttention(
+            embedding_dim, embedding_dim, embedding_dim,
+            hidden_size, num_heads, drop_out, use_bias
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size)
+        )
+    
+    def forward(self, inputs: torch.Tensor, masks: torch.Tensor):
+        inputs = self.encoder(inputs)
+        attn_out = self.attention(inputs, inputs, inputs, masks)
+        attn_out = attn_out.mean(dim=1)
+        predictions = self.decoder(attn_out)
+        return predictions
