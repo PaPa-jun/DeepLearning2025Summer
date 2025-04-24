@@ -152,8 +152,7 @@ def train_model(
                 f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2%} | "
                 f"Eval Loss: {eval_loss:.4f} | Eval Acc: {eval_acc:.2%}"
             )
-    
-    # 绘制损失曲线
+
     if plot:
         plt.figure(figsize=(12, 5))
         plt.subplot(1, 2, 1)
