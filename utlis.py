@@ -89,6 +89,41 @@ def evaluate_epoch(
     accuracy = eval_correct / eval_samples
     return avg_loss, accuracy
 
+def test_model(
+        model: nn.Module,
+        test_loader: DataLoader,
+        criterion: Union[nn.CrossEntropyLoss, nn.BCEWithLogitsLoss],
+        device: str = "cpu",
+        attention: bool = False
+):
+    test_loss = 0
+    test_correct = 0
+    test_samples = 0
+    for stuffs in test_loader:
+        if attention:
+            inputs, labels, masks = stuffs
+            inputs = inputs.to(device)
+            labels = labels.float().unsqueeze(1).to(device) \
+                if isinstance(criterion, nn.BCEWithLogitsLoss) else labels.long().to(device)
+            masks = masks.to(device)
+        else:
+            inputs, labels = stuffs
+            inputs = inputs.to(device)
+            labels = labels.float().unsqueeze(1).to(device) \
+                if isinstance(criterion, nn.BCEWithLogitsLoss) else labels.long().to(device)
+
+        predictions = model(inputs, masks) if attention else model(inputs)
+        loss = criterion(predictions, labels)
+
+        test_loss += loss.item()
+        test_correct += ((predictions > 0.5).float() == labels).sum().item() \
+            if isinstance(criterion, nn.BCEWithLogitsLoss) else (torch.argmax(predictions, 1) == labels).sum().item()
+        test_samples += labels.shape[0]
+
+    avg_loss = test_loss / len(test_loader)
+    accuracy = test_correct / test_samples
+    return avg_loss, accuracy
+
 def train_model(
         model: nn.Module, 
         epochs: int, 
