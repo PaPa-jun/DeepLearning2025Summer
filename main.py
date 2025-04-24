@@ -56,7 +56,7 @@ def rnn_expiriment(
         plot = True
     )
     test_loss, test_acc = test_model(model, test_loader, criterion, device, attention = False)
-    print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
+    print(f"Test Loss: {test_loss:.4f} | Test Accuracy: {test_acc:.4f}")
 
 def attention_expiriment(
         texts: list, labels: list, tokenizer: Tokenizer, batch_size: int = 32,
@@ -113,7 +113,7 @@ def attention_expiriment(
         plot = True
     )
     test_loss, test_acc = test_model(model, test_loader, criterion, device, attention = True)
-    print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
+    print(f"Test Loss: {test_loss:.4f} | Test Accuracy: {test_acc:.4f}")
 
 def main():
     texts, labels = load_data("enron_spam_data.csv")
