@@ -1,4 +1,4 @@
-import pandas as pd, numpy as np
+import pandas as pd, numpy as np, time
 import torch.nn as nn, torch
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
@@ -179,7 +179,7 @@ def test_model(
         "accuracy": accuracy,
         "precision": precision,
         "recall": recall,
-        "f1": f1,
+        "f1": f1
     }
 
 
@@ -201,6 +201,7 @@ def train_model(
     min_delta: float = 0.001,
 ) -> Dict[str, List[float]]:
     assert not save or (save and save_path), "save_path must be provided when save=True"
+    start_time = time.time()
 
     history = {"train_loss": [], "train_acc": [], "eval_loss": [], "eval_acc": []}
 
@@ -244,6 +245,9 @@ def train_model(
                 f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2%} | "
                 f"Eval Loss: {eval_loss:.4f} | Eval Acc: {eval_acc:.2%}"
             )
+
+    end_time = time.time()
+    if verbose: print(f"Training finished. Time costs: {(end_time - start_time):.2f} s.")
 
     if plot:
         plt.figure(figsize=(12, 5))
