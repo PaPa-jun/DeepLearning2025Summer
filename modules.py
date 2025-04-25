@@ -181,7 +181,7 @@ class DotProductAttention(nn.Module):
 
         attn_weights = self.dropout(F.softmax(scores, dim=-1))
         output = torch.matmul(attn_weights, values)
-        return output
+        return output, attn_weights
 
 
 class MultiHeadAttention(nn.Module):
@@ -232,10 +232,11 @@ class MultiHeadAttention(nn.Module):
         if masks is not None:
             masks = masks.repeat_interleave(self.num_heads, dim=0)
 
-        attn_output = self.attention(Q, K, V, masks)
+        attn_output, attn_weights = self.attention(Q, K, V, masks)
         attn_output = self._transpose_output(attn_output)
         output = self.W_o(attn_output)
-        return output
+        attn_weights = attn_weights.view(queries.shape[0], self.num_heads, *attn_weights.shape[1:])
+        return output, attn_weights
 
 
 class PositionalEncoder(nn.Module):
@@ -371,8 +372,8 @@ class SpamClassifierAttention(nn.Module):
             nn.Linear(hidden_size, output_size),
         )
 
-    def forward(self, inputs: torch.Tensor, masks: torch.Tensor):
+    def forward(self, inputs: torch.Tensor, masks: torch.Tensor = None):
         inputs = self.encoder(inputs)
-        attn_out = self.attention(inputs, inputs, inputs, masks)
+        attn_out, _ = self.attention(inputs, inputs, inputs, masks)
         predictions = self.decoder(attn_out[:, -1, :])
         return predictions
