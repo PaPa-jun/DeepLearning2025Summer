@@ -239,9 +239,9 @@ class MultiHeadAttention(nn.Module):
         return output, attn_weights
 
 
-class PositionalEncoder(nn.Module):
+class AbsolutPositionalEncoder(nn.Module):
     def __init__(self, sequence_length: int, embedding_dim: int, dropout: float = 0):
-        super(PositionalEncoder, self).__init__()
+        super(AbsolutPositionalEncoder, self).__init__()
         self.dropout = nn.Dropout(dropout)
         position_matrix = torch.zeros(1, sequence_length, embedding_dim)
         term = torch.arange(sequence_length, dtype=torch.float32).reshape(
@@ -354,7 +354,7 @@ class SpamClassifierAttention(nn.Module):
             (
                 RotaryPositionalEncoder(encoding_length, embedding_dim, dropout)
                 if rotary
-                else PositionalEncoder(encoding_length, embedding_dim, dropout)
+                else AbsolutPositionalEncoder(encoding_length, embedding_dim, dropout)
             ),
         )
         self.attention = MultiHeadAttention(
