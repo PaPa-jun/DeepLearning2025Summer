@@ -235,7 +235,9 @@ class MultiHeadAttention(nn.Module):
         attn_output, attn_weights = self.attention(Q, K, V, masks)
         attn_output = self._transpose_output(attn_output)
         output = self.W_o(attn_output)
-        attn_weights = attn_weights.view(queries.shape[0], self.num_heads, *attn_weights.shape[1:])
+        attn_weights = attn_weights.view(
+            queries.shape[0], self.num_heads, *attn_weights.shape[1:]
+        )
         return output, attn_weights
 
 

@@ -179,7 +179,7 @@ def test_model(
         "accuracy": accuracy,
         "precision": precision,
         "recall": recall,
-        "f1": f1
+        "f1": f1,
     }
 
 
@@ -247,7 +247,8 @@ def train_model(
             )
 
     end_time = time.time()
-    if verbose: print(f"Training finished. Time costs: {(end_time - start_time):.2f} s.")
+    if verbose:
+        print(f"Training finished. Time costs: {(end_time - start_time):.2f} s.")
 
     if plot:
         plt.figure(figsize=(12, 5))

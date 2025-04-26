@@ -10,7 +10,7 @@ texts, labels = load_data("enron_spam_data.csv")
 tokenizer = Tokenizer(texts, "word", 10, ["<pad>"])
 
 dataset = SpamDataset(texts, labels, tokenizer, 4, mask=True)
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)   
+dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 embedding = nn.Embedding(tokenizer.vocab_size, 128)
 
@@ -23,6 +23,7 @@ for inputs, labels, masks in dataloader:
     print(attention_weights.shape)
     break
 
+
 def plot_attention(attention, head_idx):
     plt.figure(figsize=(10, 8))
     sns.heatmap(attention[head_idx].detach().cpu().numpy(), cmap="viridis")
@@ -30,6 +31,7 @@ def plot_attention(attention, head_idx):
     plt.xlabel("Key Positions")
     plt.ylabel("Query Positions")
     plt.show()
+
 
 batch_index = 0  # 选择一个批次中的样本进行可视化
 
