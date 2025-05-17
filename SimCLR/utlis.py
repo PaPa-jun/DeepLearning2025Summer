@@ -4,6 +4,10 @@ from torchvision import datasets, transforms
 from torchvision.transforms.functional import InterpolationMode
 from torch.utils.data import Subset, DataLoader
 from modules import SimCLRDataset
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, classification_report
+import seaborn as sns
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
 def load_cifar10_subset(path, subset_classes=10, train_percent=0.1, seed=42):
@@ -43,9 +47,7 @@ def load_cifar10_subset(path, subset_classes=10, train_percent=0.1, seed=42):
     train_subset = Subset(train_dataset, sampled_indices)
     test_subset = Subset(test_dataset, test_indices)
 
-    return SimCLRDataset(train_subset, get_augmentations()), SimCLRDataset(
-        test_subset, get_augmentations()
-    )
+    return train_subset, test_subset
 
 
 def get_augmentations():
@@ -58,19 +60,41 @@ def get_augmentations():
                 ratio=(0.75, 1.33),
                 interpolation=InterpolationMode.BILINEAR,
             ),
-            # 2. 颜色抖动（颜色增强）
-            transforms.ColorJitter(
-                brightness=0.8, contrast=0.8, saturation=0.8, hue=0.2
-            ),
-            # 3. 随机水平翻转
+            # 2. 随机水平翻转（概率 50%）
             transforms.RandomHorizontalFlip(p=0.5),
-            # 4. 转换为张量
+            # 3. 颜色抖动（整体概率 80%，参数强度与论文一致）
+            transforms.RandomApply(
+                [
+                    transforms.ColorJitter(
+                        brightness=0.2,
+                        contrast=0.2,
+                        saturation=0.2,
+                        hue=0.2,
+                    )
+                ],
+                p=0.8,
+            ),
+            transforms.RandomGrayscale(p=0.2),
+            transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)),
             transforms.ToTensor(),
-            # 5. 归一化
             transforms.Normalize(
-                mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.2010)
+                mean=(0.4914, 0.4822, 0.4465),
+                std=(0.2023, 0.1994, 0.2010),
             ),
         ]
+    )
+
+
+# 修改点：保存完整训练状态
+def save_checkpoint(model, optimizer, epoch, loss, path="checkpoint.pth"):
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "loss": loss,
+        },
+        path,
     )
 
 
@@ -97,22 +121,100 @@ def pretrain_epoch(
         loss.backward()
         optimizer.step()
 
-    average_loss = total_loss / len(train_loader)
-    return average_loss
+    return total_loss / len(train_loader)
+
+
+def validate(
+    model: nn.Module,
+    val_loader: DataLoader,
+    criterion: nn.Module,
+    device: str = "cpu",
+):
+    model.eval()
+    total_loss = 0
+    with torch.no_grad():
+        for view_1, view_2, _ in val_loader:
+            view_1 = view_1.to(device)
+            view_2 = view_2.to(device)
+
+            _, projections_1 = model(view_1)
+            _, projections_2 = model(view_2)
+
+            loss = criterion(projections_1, projections_2)
+            total_loss += loss.item()
+
+    return total_loss / len(val_loader)
 
 
 def pretrain(
     model: nn.Module,
     train_loader: DataLoader,
+    val_loader: DataLoader,
     optimizer: optim.Optimizer,
     criterion: nn.Module,
     epochs: int = 10,
+    patience=10,
     device: str = "cpu",
 ):
     best_loss = torch.inf
+    no_improve = 0
+    scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
+
     for epoch in range(epochs):
-        loss = pretrain_epoch(model, train_loader, optimizer, criterion, device)
-        print(f"Epoch: {epoch + 1}/{epochs} | Loss: {loss:.4f}")
-        if loss < best_loss:
-            torch.save(model, "pretrained_model.pth")
-            print(f'Best model saved as "pretrained_model.pth" with loss: {loss:.4f}.')
+        train_loss = pretrain_epoch(model, train_loader, optimizer, criterion, device)
+        val_loss = validate(model, val_loader, criterion, device)
+        scheduler.step()
+
+        print(
+            f"Epoch: {epoch + 1}/{epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}"
+        )
+
+        if val_loss < best_loss:
+            best_loss = val_loss
+            save_checkpoint(model, optimizer, epoch, val_loss)
+            print("best model saved.")
+            no_improve = 0
+        else:
+            no_improve += 1
+            if no_improve >= patience:
+                print("Early stopping triggered.")
+                break
+
+
+def test_model(model, test_loader, device="cuda"):
+    model.eval()  # 设置为评估模式 [[1]]
+    total_correct = 0
+    total_samples = 0
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():  # 禁用梯度计算 [[1]]
+        for images, labels in test_loader:
+            images, labels = images.to(device), labels.to(device)
+
+            # 前向传播
+            outputs = model(images)
+            predicted = torch.argmax(outputs, dim=1)
+
+            # 统计指标
+            total_correct += (predicted == labels).sum().item()
+            total_samples += labels.size(0)
+            all_preds.extend(predicted.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+    accuracy = total_correct / total_samples
+    print(f"Test Accuracy: {accuracy:.4f}")
+
+    # 混淆矩阵可视化 [[7]]
+    cm = confusion_matrix(all_labels, all_preds)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title("Confusion Matrix")
+    plt.savefig("test_confusion_matrix.png")
+    plt.close()
+
+    # 分类报告 [[7]]
+    print("Classification Report:")
+    print(classification_report(all_labels, all_preds))

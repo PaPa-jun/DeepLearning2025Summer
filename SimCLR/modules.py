@@ -1,41 +1,32 @@
 import torch, torch.nn as nn
-from torch.nn.functional import normalize, cross_entropy
+from torch.functional import F
 from torch.utils.data import Dataset
 from torchvision import transforms
 
 
-class NTXCrossEntropyLoss(nn.Module):
+class NTXentCrossEntropyLoss(nn.Module):
     def __init__(self, temperature=0.5):
-        super(NTXCrossEntropyLoss, self).__init__()
+        super().__init__()
         self.temperature = temperature
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            z1, z2: 两个增强视图的投影向量 (batch_size, projection_dim)
-        Returns:
-            loss: 标量损失值
-        """
-        # 拼接向量并标准化
-        representations = torch.cat([z1, z2], dim=0)  # (2N, D)
-        representations = normalize(representations, dim=1)  # 归一化到单位球面
+        assert z1.shape == z2.shape, f"expect two tensor has same shape, but got z1.shape: {z1.shape}, z2.shape: {z2.shape}."
+        N, D = z1.shape
+        Z = torch.zeros((2 * N, D), device=z1.device, dtype=torch.float32)
+        Z[::2, :], Z[1::2, :] = z1, z2
+        Z = F.normalize(Z, dim=1)
+        sim_mat = torch.exp(torch.mm(Z, Z.T) / self.temperature)
+        loss = 0
+        for i in range(N):
+            loss += self._loss(sim_mat, 2 * i, 2 * i + 1) + self._loss(
+                sim_mat, 2 * i + 1, 2 * i
+            )
+        return loss / (2 * N)
 
-        # 计算相似度矩阵
-        similarity_matrix = torch.mm(representations, representations.t())  # (2N, 2N)
-
-        # 生成正样本对的标签
-        batch_size = z1.shape[0]
-        labels = torch.arange(batch_size, device=z1.device).long()
-        labels = torch.cat([labels, labels], dim=0)  # (2N,) 重复两次表示正样本对
-
-        # 计算损失
-        logits = similarity_matrix / self.temperature
-        logits = (
-            logits - torch.eye(logits.shape[0], device=logits.device) * 1e12
-        )  # 排除对角线元素
-        loss = cross_entropy(logits, labels)  # 交叉熵损失
-
-        return loss
+    def _loss(self, sim_mat: torch.Tensor, i: int, j: int):
+        return -torch.log(
+            sim_mat[i][j] / (torch.sum(sim_mat[i, :]) - sim_mat[i, i] + 1e-8)
+        )
 
 
 class SimCLRModel(nn.Module):
@@ -57,8 +48,25 @@ class SimCLRModel(nn.Module):
         batch_size, channel, height, width = inputs.shape
         features = self.encoder(inputs)
         features = features.view(batch_size, -1)
-        projections= self.projection_head(features)
+        projections = self.projection_head(features)
         return features, projections
+
+
+class Classifier(nn.Module):
+    def __init__(self, encoder: nn.Module, out_features: int):
+        super(Classifier, self).__init__()
+        self.encodr = encoder
+        self.classification_head = nn.Sequential(
+            nn.Linear(512, out_features),
+            nn.Sigmoid()
+        )
+
+    def forward(self, inputs: torch.Tensor):
+        batch_size, channel, height, width = inputs.shape
+        features = self.encodr(inputs)
+        features = features.view(batch_size, -1)
+        out = self.classification_head(features)
+        return out
 
 
 class SimCLRDataset(Dataset):
@@ -68,7 +76,7 @@ class SimCLRDataset(Dataset):
 
     def __len__(self):
         return len(self.dataset)
-    
+
     def __getitem__(self, index):
         features, labels = self.dataset[index]
         image_pil = transforms.ToPILImage()(features)
