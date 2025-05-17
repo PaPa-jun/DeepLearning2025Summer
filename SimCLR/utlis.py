@@ -3,7 +3,6 @@ import numpy as np
 from torchvision import datasets, transforms
 from torchvision.transforms.functional import InterpolationMode
 from torch.utils.data import Subset, DataLoader
-from modules import SimCLRDataset
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
@@ -66,10 +65,10 @@ def get_augmentations():
             transforms.RandomApply(
                 [
                     transforms.ColorJitter(
-                        brightness=0.2,
-                        contrast=0.2,
-                        saturation=0.2,
-                        hue=0.2,
+                        brightness=0.4,
+                        contrast=0.4,
+                        saturation=0.4,
+                        hue=0.4,
                     )
                 ],
                 p=0.8,
