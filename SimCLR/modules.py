@@ -27,6 +27,28 @@ class NTXentCrossEntropyLoss(nn.Module):
         return -torch.log(
             sim_mat[i][j] / (torch.sum(sim_mat[i, :]) - sim_mat[i, i] + 1e-8)
         )
+    
+class NTXentLoss(nn.Module):
+    def __init__(self, temperature=0.5):
+        super(NTXentLoss, self).__init__()
+        self.temperature = temperature
+        self.criterion = nn.CrossEntropyLoss(reduction="sum")
+    
+    def forward(self, z_i, z_j):
+        batch_size = z_i.size(0)
+        
+        z = torch.cat([z_i, z_j], dim=0)  # [2N, D]
+        sim_matrix = torch.exp(torch.mm(z, z.t()) / self.temperature)  # [2N, 2N]
+
+        mask = torch.eye(2 * batch_size, dtype=torch.bool, device=z.device)
+        mask = mask ^ 1
+        
+        pos_sim = torch.exp(torch.sum(z_i * z_j, dim=-1) / self.temperature)
+        pos_sim = torch.cat([pos_sim, pos_sim], dim=0)  # [2N]
+        neg_sim = torch.sum(sim_matrix * mask, dim=-1)  # [2N]
+        
+        loss = -torch.log(pos_sim / (pos_sim + neg_sim)).mean()
+        return loss
 
 
 class SimCLRModel(nn.Module):
@@ -41,13 +63,14 @@ class SimCLRModel(nn.Module):
             nn.Linear(512, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
+            nn.Dropout(0.1),
             nn.Linear(512, projection_dim),
         )
 
     def forward(self, inputs: torch.Tensor):
         batch_size, channel, height, width = inputs.shape
         features = self.encoder(inputs)
-        features = features.view(batch_size, -1)
+        # features = features.view(batch_size, -1)
         projections = self.projection_head(features)
         return features, projections
 
@@ -56,17 +79,15 @@ class Classifier(nn.Module):
     def __init__(self, encoder: nn.Module, out_features: int):
         super(Classifier, self).__init__()
         self.encodr = encoder
-        self.classification_head = nn.Sequential(
-            nn.Linear(512, out_features),
-            nn.Sigmoid()
-        )
+        self.classification_head = nn.Sequential(nn.Linear(512, out_features))
 
     def forward(self, inputs: torch.Tensor):
         batch_size, channel, height, width = inputs.shape
-        features = self.encodr(inputs)
-        features = features.view(batch_size, -1)
+        with torch.no_grad():
+            features = self.encodr(inputs)
+        # features = features.view(batch_size, -1)
         out = self.classification_head(features)
-        return out
+        return F.softmax(out, dim=1)
 
 
 class SimCLRDataset(Dataset):

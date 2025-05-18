@@ -48,40 +48,63 @@ def load_cifar10_subset(path, subset_classes=10, train_percent=0.1, seed=42):
 
     return train_subset, test_subset
 
+# def get_augmentations(normalize=True):
+#     """
+#     定义SimCLR数据增强
+#     参数:
+#         normalize: 是否添加Normalize
+#     返回:
+#         augmentation: 数据增强操作
+#     """
+#     transform_list = [
+#         # 1. 随机调整大小并裁剪到32x32
+#         transforms.RandomResizedCrop(size=32),
+#         # 2. 以0.5的概率水平翻转图像
+#         transforms.RandomHorizontalFlip(p=0.5),
+#         # 3. 以0.8的概率应用颜色抖动
+#         # 4. 以0.2的概率转换为灰度图
+#         transforms.ToTensor(),
+#     ]
+#     if normalize:
+#         transform_list.append(
+#             transforms.Normalize(  # cifar-10数据集的均值和标准差
+#                 (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+#             )
+#         )
+#     return transforms.Compose(transform_list)
 
-def get_augmentations():
-    return transforms.Compose(
-        [
-            # 1. 随机裁剪并缩放（空间增强）
-            transforms.RandomResizedCrop(
-                size=32,
-                scale=(0.2, 1.0),
-                ratio=(0.75, 1.33),
-                interpolation=InterpolationMode.BILINEAR,
-            ),
-            # 2. 随机水平翻转（概率 50%）
-            transforms.RandomHorizontalFlip(p=0.5),
-            # 3. 颜色抖动（整体概率 80%，参数强度与论文一致）
-            transforms.RandomApply(
-                [
-                    transforms.ColorJitter(
-                        brightness=0.4,
-                        contrast=0.4,
-                        saturation=0.4,
-                        hue=0.4,
-                    )
-                ],
-                p=0.8,
-            ),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)),
-            transforms.ToTensor(),
+def get_augmentations(normalize: bool = True):
+    transform_list = [
+        transforms.RandomResizedCrop(
+            size=32,
+            scale=(0.2, 1.0),
+            ratio=(0.75, 1.33),
+            interpolation=InterpolationMode.BILINEAR,
+        ),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomApply(
+            [
+                transforms.ColorJitter(
+                    brightness=0.2,
+                    contrast=0.2,
+                    saturation=0.2,
+                    hue=0.2,
+                )
+            ],
+            p=0.8,
+        ),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)),
+        transforms.ToTensor(),
+    ]
+    if normalize is True:
+        transform_list.append(
             transforms.Normalize(
                 mean=(0.4914, 0.4822, 0.4465),
                 std=(0.2023, 0.1994, 0.2010),
             ),
-        ]
-    )
+        )
+    return transforms.Compose(transform_list)
 
 
 # 修改点：保存完整训练状态
