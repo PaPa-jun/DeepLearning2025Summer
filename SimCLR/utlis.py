@@ -48,32 +48,8 @@ def load_cifar10_subset(path, subset_classes=10, train_percent=0.1, seed=42):
 
     return train_subset, test_subset
 
-# def get_augmentations(normalize=True):
-#     """
-#     定义SimCLR数据增强
-#     参数:
-#         normalize: 是否添加Normalize
-#     返回:
-#         augmentation: 数据增强操作
-#     """
-#     transform_list = [
-#         # 1. 随机调整大小并裁剪到32x32
-#         transforms.RandomResizedCrop(size=32),
-#         # 2. 以0.5的概率水平翻转图像
-#         transforms.RandomHorizontalFlip(p=0.5),
-#         # 3. 以0.8的概率应用颜色抖动
-#         # 4. 以0.2的概率转换为灰度图
-#         transforms.ToTensor(),
-#     ]
-#     if normalize:
-#         transform_list.append(
-#             transforms.Normalize(  # cifar-10数据集的均值和标准差
-#                 (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
-#             )
-#         )
-#     return transforms.Compose(transform_list)
 
-def get_augmentations(normalize: bool = True):
+def get_augmentations_complex(normalize: bool = True):
     transform_list = [
         transforms.RandomResizedCrop(
             size=32,
@@ -103,6 +79,32 @@ def get_augmentations(normalize: bool = True):
                 mean=(0.4914, 0.4822, 0.4465),
                 std=(0.2023, 0.1994, 0.2010),
             ),
+        )
+    return transforms.Compose(transform_list)
+
+
+def get_augmentations_simple(normalize=True):
+    """
+    定义SimCLR数据增强
+    参数:
+        normalize: 是否添加Normalize
+    返回:
+        augmentation: 数据增强操作
+    """
+    transform_list = [
+        # 1. 随机调整大小并裁剪到32x32
+        transforms.RandomResizedCrop(size=32),
+        # 2. 以0.5的概率水平翻转图像
+        transforms.RandomHorizontalFlip(p=0.5),
+        # 3. 以0.8的概率应用颜色抖动
+        # 4. 以0.2的概率转换为灰度图
+        transforms.ToTensor(),
+    ]
+    if normalize:
+        transform_list.append(
+            transforms.Normalize(  # cifar-10数据集的均值和标准差
+                (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+            )
         )
     return transforms.Compose(transform_list)
 

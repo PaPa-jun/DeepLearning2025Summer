@@ -1,6 +1,6 @@
 import torch.nn as nn, torch.optim as optim, torch
 from utlis import load_cifar10_subset, pretrain, get_augmentations, test_model
-from modules import SimCLRModel, Classifier, SimCLRDataset, NTXentCrossEntropyLoss, NTXentLoss
+from modules import SimCLRModel, Classifier, SimCLRDataset, NTXentCrossEntropyLoss
 from torchvision.models import resnet18
 from torch.utils.data import DataLoader
 
