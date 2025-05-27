@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from modules import SpamClassifierRNN, SpamClassifierAttention, SpamDataset, Tokenizer
-from utlis import load_data, train_model, test_model
+from utils import load_data, train_model, test_model
 from sklearn.model_selection import train_test_split
 
 

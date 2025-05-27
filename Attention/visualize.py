@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from torch.utils.data import DataLoader
 from modules import MultiHeadAttention, Tokenizer, SpamDataset
-from utlis import load_data
+from utils import load_data
 
 texts, labels = load_data("enron_spam_data.csv")
 
