@@ -27,7 +27,7 @@ def get_bert_features(texts):
         # 提取 [CLS] 标记的嵌入向量作为文本特征
         cls_embedding = outputs.last_hidden_state[:, 0, :].cpu().numpy()
         features.append(cls_embedding[0])
-    return np.array(features)
+    return np.array(features) 
 
 # 生成 BERT 特征
 X = get_bert_features(texts)
