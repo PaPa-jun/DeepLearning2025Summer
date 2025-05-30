@@ -1,8 +1,7 @@
-**.json
+**.jsonl
 .Ds_Store
 **/.ipynb_checkpoints/**
 **/__pycache__/**
 **.pdf
-**test.**
 **/datasets/**
 **.pth

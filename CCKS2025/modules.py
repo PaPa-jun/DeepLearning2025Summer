@@ -29,3 +29,26 @@ class TextDataset(Dataset):
             "attention_mask": encoding["attention_mask"].flatten(),
             "label": torch.tensor(label, dtype=torch.long)
         }
+    
+class TestDataset(Dataset):
+    def __init__(self, texts, tokenizer, max_length=512):
+        self.texts = texts
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.texts)
+
+    def __getitem__(self, idx):
+        text = self.texts[idx]
+        encoding = self.tokenizer(
+            text,
+            truncation=True,
+            padding="max_length",
+            max_length=self.max_length,
+            return_tensors="pt"
+        )
+        return {
+            "input_ids": encoding["input_ids"].flatten(),
+            "attention_mask": encoding["attention_mask"].flatten()
+        }
